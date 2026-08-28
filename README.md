@@ -110,6 +110,9 @@ s3reg publish --tool mytool --version 1.2.3 \
 Filename tokens understood: `Darwin`/`darwin`/`macos`, `Linux`/`linux`,
 `Windows`/`windows`; `x86_64`/`amd64`, `arm64`/`aarch64`.
 
+To wire this into a tool's own release pipeline, see
+[Publishing a tool with goreleaser](docs/publishing-with-goreleaser.md).
+
 ### ls
 
 ```sh
@@ -197,21 +200,10 @@ builds:
 ### 2. A different project publishing into this registry
 
 Any project whose own goreleaser build produces a `dist/` can push its release
-into the registry with an after-release hook:
-
-```yaml
-checksum:
-  name_template: checksums.txt
-
-release:
-  hooks:
-    after:
-      - >-
-        s3reg publish --tool mytool --version {{ .Version }}
-        --dist ./dist --checksums ./dist/checksums.txt
-```
-
-The hook needs `S3REG_BUCKET` (and AWS credentials) in its environment.
+into the registry with an after-release hook that runs `s3reg publish --dist`.
+The full walkthrough — archive naming, a complete `.goreleaser.yaml`, and
+GitHub Actions / GitLab CI wiring — is in
+[Publishing a tool with goreleaser](docs/publishing-with-goreleaser.md).
 
 ## Consumer usage (mise plugin)
 
