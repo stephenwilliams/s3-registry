@@ -1,0 +1,9 @@
+/bin/
+/dist/
+*.out
+coverage.txt
+coverage.html
+
+# macOS / editors
+.DS_Store
+*.swp

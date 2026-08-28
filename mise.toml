@@ -1,0 +1,28 @@
+[tools]
+go = "1.27"
+golangci-lint = "latest"
+hk = "latest"
+pkl = "latest"
+actionlint = "latest"
+
+[env]
+HK_MISE = 1
+
+[hooks]
+postinstall = "hk install --mise"
+
+[tasks.build]
+description = "Build the s3reg binary"
+run = "go build -o bin/s3reg ./cmd/s3reg"
+
+[tasks.test]
+description = "Run tests with race detector and coverage"
+run = "go test -race -cover ./..."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run"
+
+[tasks.run]
+description = "Run the server locally"
+run = "go run ./cmd/s3reg serve"

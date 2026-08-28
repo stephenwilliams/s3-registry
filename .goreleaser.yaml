@@ -1,0 +1,39 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: s3reg
+    main: ./cmd/s3reg
+    binary: s3reg
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/stephenwilliams/s3-registry/internal/buildinfo.Version={{ .Version }}
+      - -X github.com/stephenwilliams/s3-registry/internal/buildinfo.Commit={{ .Commit }}
+      - -X github.com/stephenwilliams/s3-registry/internal/buildinfo.BuiltAt={{ .Date }}
+      - -X github.com/stephenwilliams/s3-registry/internal/buildinfo.GitTag={{ .Tag }}
+
+archives:
+  - id: s3reg
+    formats: [tar.gz]
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  use: git

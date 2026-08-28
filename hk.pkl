@@ -1,0 +1,34 @@
+amends "package://github.com/jdx/hk/releases/download/v1.56.0/hk@1.56.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v1.56.0/hk@1.56.0#/Builtins.pkl"
+
+local linters = new Mapping<String, Step> {
+    ["gofmt"] {
+        glob = "*.go"
+        check = "test -z \"$(gofmt -l {{files}})\""
+        fix = "gofmt -w {{files}}"
+    }
+    ["golangci-lint"] {
+        glob = "*.go"
+        check = "golangci-lint run"
+        fix = "golangci-lint run --fix"
+    }
+    ["actionlint"] {
+        glob = ".github/workflows/*.{yml,yaml}"
+        check = "actionlint {{files}}"
+    }
+}
+
+hooks {
+    ["pre-commit"] {
+        fix = true
+        stash = "git"
+        steps = linters
+    }
+    ["fix"] {
+        fix = true
+        steps = linters
+    }
+    ["check"] {
+        steps = linters
+    }
+}
