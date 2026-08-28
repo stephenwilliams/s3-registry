@@ -30,6 +30,12 @@ var ErrNotFound = errors.New("not found")
 type Config struct {
 	Bucket string
 	Region string
+	// Endpoint overrides the S3 endpoint (e.g. a LocalStack/MinIO URL). Empty
+	// uses the default AWS endpoint. Sourced from AWS_ENDPOINT_URL at the CLI.
+	Endpoint string
+	// UsePathStyle forces path-style addressing, required by most S3-compatible
+	// stores. Sourced from S3REG_S3_PATH_STYLE at the CLI.
+	UsePathStyle bool
 }
 
 // S3API is the subset of the S3 client the store uses. It exists so tests can
@@ -66,7 +72,14 @@ func New(ctx context.Context, cfg Config) (*Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load aws config: %w", err)
 	}
-	client := s3.NewFromConfig(awsCfg)
+	client := s3.NewFromConfig(awsCfg, func(o *s3.Options) {
+		if cfg.Endpoint != "" {
+			o.BaseEndpoint = aws.String(cfg.Endpoint)
+		}
+		if cfg.UsePathStyle {
+			o.UsePathStyle = true
+		}
+	})
 	presign := s3.NewPresignClient(client)
 	return &Store{
 		cfg: cfg,

@@ -13,8 +13,10 @@ import (
 
 // global flag-backed values, defaulted from env in init.
 var (
-	flagBucket string
-	flagRegion string
+	flagBucket    string
+	flagRegion    string
+	flagEndpoint  string
+	flagPathStyle bool
 )
 
 func main() {
@@ -34,6 +36,8 @@ func newRootCmd() *cobra.Command {
 	}
 	root.PersistentFlags().StringVar(&flagBucket, "bucket", envOr("S3REG_BUCKET", ""), "S3 bucket (env S3REG_BUCKET)")
 	root.PersistentFlags().StringVar(&flagRegion, "region", envOr("S3REG_REGION", ""), "AWS region (env S3REG_REGION)")
+	root.PersistentFlags().StringVar(&flagEndpoint, "endpoint", envOr("AWS_ENDPOINT_URL", ""), "S3 endpoint override for S3-compatible stores (env AWS_ENDPOINT_URL)")
+	root.PersistentFlags().BoolVar(&flagPathStyle, "s3-path-style", envOr("S3REG_S3_PATH_STYLE", "") == "true", "force path-style S3 addressing (env S3REG_S3_PATH_STYLE=true)")
 
 	root.AddCommand(
 		newServeCmd(),
@@ -51,7 +55,12 @@ func newStore(ctx context.Context) (*store.Store, error) {
 	if flagBucket == "" {
 		return nil, fmt.Errorf("bucket is required (set --bucket or S3REG_BUCKET)")
 	}
-	return store.New(ctx, store.Config{Bucket: flagBucket, Region: flagRegion})
+	return store.New(ctx, store.Config{
+		Bucket:       flagBucket,
+		Region:       flagRegion,
+		Endpoint:     flagEndpoint,
+		UsePathStyle: flagPathStyle,
+	})
 }
 
 func envOr(key, def string) string {
