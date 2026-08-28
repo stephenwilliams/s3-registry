@@ -24,7 +24,19 @@ func (f *fakeStore) GetIndex(_ context.Context, _ string) (*index.Index, string,
 	if f.notFound {
 		return nil, "", store.ErrNotFound
 	}
-	return f.idx, "etag", nil
+	// Return a fresh copy per call, mirroring the real store, which parses a new
+	// *index.Index from S3 on every read. The cache sorts what it fetches, so a
+	// shared pointer would be falsely sorted under one goroutine while another
+	// reads it.
+	data, err := f.idx.Marshal()
+	if err != nil {
+		return nil, "", err
+	}
+	cp, err := index.Load(data)
+	if err != nil {
+		return nil, "", err
+	}
+	return cp, "etag", nil
 }
 func (f *fakeStore) PresignGet(_ context.Context, key string, _ time.Duration) (string, error) {
 	return "https://signed/" + key, nil
