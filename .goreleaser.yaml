@@ -29,6 +29,24 @@ archives:
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
 
+dockers_v2:
+  - id: s3reg
+    ids:
+      - s3reg
+    dockerfile: Dockerfile.goreleaser
+    images:
+      - ghcr.io/stephenwilliams/s3-registry
+    tags:
+      - "{{ .Version }}"
+      - latest
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    annotations:
+      org.opencontainers.image.source: "{{ .GitURL }}"
+      org.opencontainers.image.revision: "{{ .FullCommit }}"
+      org.opencontainers.image.version: "{{ .Version }}"
+
 checksum:
   name_template: checksums.txt
 

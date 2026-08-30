@@ -1,0 +1,6 @@
+FROM gcr.io/distroless/static:nonroot
+ARG TARGETPLATFORM
+COPY ${TARGETPLATFORM}/s3reg /s3reg
+EXPOSE 8080
+ENTRYPOINT ["/s3reg"]
+CMD ["serve"]
