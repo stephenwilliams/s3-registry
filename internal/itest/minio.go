@@ -21,7 +21,7 @@ import (
 // writes (both If-None-Match:* and If-Match), which the store relies on for
 // optimistic concurrency. LocalStack Community does not enforce If-Match, so the
 // harness uses MinIO instead (see the plan's risk note).
-const minioImage = "minio/minio:RELEASE.2025-04-22T22-12-26Z"
+const minioImage = "cgr.dev/chainguard/minio:latest@sha256:3b6e40c30ecd5cea627e382ff0b82ca841f58c52294578787043ee80c8ef7c82"
 
 // region is fixed; the value only needs to be consistent between the client and
 // the presign step.
