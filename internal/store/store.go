@@ -216,9 +216,15 @@ func (s *Store) ListTools(ctx context.Context) ([]string, error) {
 	return tools, nil
 }
 
-// ListKeys returns all object keys under a prefix.
-func (s *Store) ListKeys(ctx context.Context, prefix string) ([]string, error) {
-	var keys []string
+// Object is one listed S3 object.
+type Object struct {
+	Key          string
+	LastModified time.Time
+}
+
+// ListObjects returns all objects under a prefix.
+func (s *Store) ListObjects(ctx context.Context, prefix string) ([]Object, error) {
+	var objs []Object
 	var token *string
 	for {
 		out, err := s.api.ListObjectsV2(ctx, &s3.ListObjectsV2Input{
@@ -231,7 +237,7 @@ func (s *Store) ListKeys(ctx context.Context, prefix string) ([]string, error) {
 		}
 		for _, o := range out.Contents {
 			if o.Key != nil {
-				keys = append(keys, *o.Key)
+				objs = append(objs, Object{Key: *o.Key, LastModified: aws.ToTime(o.LastModified)})
 			}
 		}
 		if out.IsTruncated != nil && *out.IsTruncated {
@@ -239,6 +245,19 @@ func (s *Store) ListKeys(ctx context.Context, prefix string) ([]string, error) {
 			continue
 		}
 		break
+	}
+	return objs, nil
+}
+
+// ListKeys returns all object keys under a prefix.
+func (s *Store) ListKeys(ctx context.Context, prefix string) ([]string, error) {
+	objs, err := s.ListObjects(ctx, prefix)
+	if err != nil {
+		return nil, err
+	}
+	var keys []string
+	for _, o := range objs {
+		keys = append(keys, o.Key)
 	}
 	return keys, nil
 }

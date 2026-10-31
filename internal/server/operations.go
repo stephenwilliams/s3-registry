@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -25,7 +26,7 @@ func (s *Server) registerOperations(api huma.API) {
 		Method:      http.MethodGet,
 		Path:        "/tools/{tool}/versions",
 		Summary:     "List versions",
-		Description: "List a tool's versions, ascending by semver.",
+		Description: "List a tool's versions, ascending by semver. releases carries the same list with each version's publish time, when known.",
 	}, s.listVersions)
 
 	huma.Register(api, huma.Operation{
@@ -68,9 +69,15 @@ type listVersionsInput struct {
 	Tool string `path:"tool"`
 }
 
+type release struct {
+	Version   string    `json:"version"`
+	CreatedAt time.Time `json:"created_at,omitzero" doc:"RFC 3339 publish time; absent when unknown"`
+}
+
 type listVersionsOutput struct {
 	Body struct {
-		Versions []string `json:"versions"`
+		Versions []string  `json:"versions"`
+		Releases []release `json:"releases"`
 	}
 }
 
@@ -83,6 +90,10 @@ func (s *Server) listVersions(ctx context.Context, in *listVersionsInput) (*list
 	out.Body.Versions = idx.VersionStrings()
 	if out.Body.Versions == nil {
 		out.Body.Versions = []string{}
+	}
+	out.Body.Releases = make([]release, 0, len(out.Body.Versions))
+	for _, r := range idx.Releases() {
+		out.Body.Releases = append(out.Body.Releases, release{Version: r.Version, CreatedAt: r.Created})
 	}
 	return out, nil
 }

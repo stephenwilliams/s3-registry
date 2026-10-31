@@ -35,6 +35,7 @@ Each tool's `index.json`:
   "versions": [
     {
       "version": "1.2.3",
+      "created": "2026-08-27T00:00:00Z",
       "artifacts": {
         "darwin-arm64": { "key": "mytool/1.2.3/darwin-arm64/mytool.tar.gz", "sha256": "<hex>", "size": 12345 },
         "linux-amd64":  { "key": "mytool/1.2.3/linux-amd64/mytool.tar.gz",  "sha256": "<hex>", "size": 12345 }
@@ -44,9 +45,10 @@ Each tool's `index.json`:
 }
 ```
 
-Versions are stored ascending by semver. Index writes are conditional
-(`If-Match` on the object ETag) so concurrent publishers cannot clobber each
-other; a losing writer reloads and retries.
+Versions are stored ascending by semver. `created` is set when a version is
+first published and does not change when more os-arch builds are added to it.
+Index writes are conditional (`If-Match` on the object ETag) so concurrent
+publishers cannot clobber each other; a losing writer reloads and retries.
 
 ## Environment variables
 
@@ -132,7 +134,9 @@ Deletes the object(s) and prunes the index with a conditional write.
 ### reindex
 
 Rebuilds `index.json` purely from the objects under the tool prefix, streaming
-each to recompute its sha256. Overwrites the existing index.
+each to recompute its sha256. Overwrites the existing index. A version keeps
+its `created` time from the existing index; if it has none, reindex uses the
+earliest `LastModified` of its artifacts.
 
 ```sh
 s3reg reindex --tool mytool
@@ -152,7 +156,7 @@ s3reg verify --tool mytool --version 1.2.3
 | Method & path | Returns |
 | ------------- | ------- |
 | `GET /tools` | `{"tools":["a","b"]}` |
-| `GET /tools/{tool}/versions` | `{"versions":["1.0.0","1.2.3"]}` ascending |
+| `GET /tools/{tool}/versions` | `{"versions":["1.0.0","1.2.3"],"releases":[{"version":"1.0.0","created_at":"2026-08-27T00:00:00Z"},…]}` ascending; `created_at` is absent when the publish time is unknown |
 | `GET /tools/{tool}/resolve?range=^1.2` | `{"version":"1.2.9"}` (empty/`latest` → highest) |
 | `GET /tools/{tool}/versions/{version}/artifact?os=darwin&arch=arm64` | `{"url","sha256","size","version"}` — `version` may be concrete or a range/`latest` |
 | `GET /openapi.json`, `GET /docs` | OpenAPI spec and docs UI |

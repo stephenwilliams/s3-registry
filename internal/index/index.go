@@ -18,9 +18,17 @@ type Artifact struct {
 }
 
 // Version groups the artifacts for one release, keyed by "<os>-<arch>".
+// Created is when the version was first published; zero means unknown.
 type Version struct {
 	Version   string              `json:"version"`
+	Created   time.Time           `json:"created,omitzero"`
 	Artifacts map[string]Artifact `json:"artifacts"`
+}
+
+// Release is a version with its publish time, as served to clients.
+type Release struct {
+	Version string
+	Created time.Time
 }
 
 // Index is the per-tool manifest stored at <tool>/index.json.
@@ -63,12 +71,15 @@ func (i *Index) findVersion(version string) int {
 }
 
 // Upsert sets the artifact for a version+os-arch, creating the version if
-// needed. It refreshes Updated and keeps versions sorted ascending.
+// needed. It refreshes Updated and keeps versions sorted ascending. A new
+// version is stamped Created; adding an os-arch later does not move it.
 func (i *Index) Upsert(version, osArch string, art Artifact) {
+	now := time.Now().UTC()
 	n := i.findVersion(version)
 	if n < 0 {
 		i.Versions = append(i.Versions, Version{
 			Version:   version,
+			Created:   now,
 			Artifacts: map[string]Artifact{},
 		})
 		n = len(i.Versions) - 1
@@ -77,8 +88,19 @@ func (i *Index) Upsert(version, osArch string, art Artifact) {
 		i.Versions[n].Artifacts = map[string]Artifact{}
 	}
 	i.Versions[n].Artifacts[osArch] = art
-	i.Updated = time.Now().UTC()
+	i.Updated = now
 	i.SortVersions()
+}
+
+// SetCreated overrides a version's publish time. It reports false if the
+// version is not in the index.
+func (i *Index) SetCreated(version string, t time.Time) bool {
+	n := i.findVersion(version)
+	if n < 0 {
+		return false
+	}
+	i.Versions[n].Created = t.UTC()
+	return true
 }
 
 // Remove deletes an artifact. When osArch is empty the whole version is
@@ -108,18 +130,20 @@ func (i *Index) Remove(version, osArch string) bool {
 
 // SortVersions orders versions ascending by semver. Duplicate version strings
 // (possible in a hand-edited index) are merged, artifacts combined last-writer-
-// wins per os-arch; unparseable versions are kept in first-appearance order at
-// the end.
+// wins per os-arch and the earliest Created kept; unparseable versions are kept
+// in first-appearance order at the end.
 func (i *Index) SortVersions() {
 	merged := make(map[string]*Version, len(i.Versions))
 	var seen []string // first-appearance order
 	for _, v := range i.Versions {
 		m, ok := merged[v.Version]
 		if !ok {
-			nv := Version{Version: v.Version, Artifacts: map[string]Artifact{}}
+			nv := Version{Version: v.Version, Created: v.Created, Artifacts: map[string]Artifact{}}
 			merged[v.Version] = &nv
 			seen = append(seen, v.Version)
 			m = &nv
+		} else if !v.Created.IsZero() && (m.Created.IsZero() || v.Created.Before(m.Created)) {
+			m.Created = v.Created
 		}
 		for oa, a := range v.Artifacts {
 			m.Artifacts[oa] = a
@@ -155,6 +179,15 @@ func (i *Index) versionStrings() []string {
 // VersionStrings returns the version list in stored order.
 func (i *Index) VersionStrings() []string {
 	return i.versionStrings()
+}
+
+// Releases returns each version with its publish time, in stored order.
+func (i *Index) Releases() []Release {
+	out := make([]Release, len(i.Versions))
+	for n, v := range i.Versions {
+		out[n] = Release{Version: v.Version, Created: v.Created}
+	}
+	return out
 }
 
 // ResolveVersion resolves a constraint to a concrete version and returns that

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stephenwilliams/s3-registry/internal/index"
 	"github.com/stephenwilliams/s3-registry/internal/itest"
@@ -268,6 +269,49 @@ func TestReindexRebuilds(t *testing.T) {
 		if _, ok := findArtifact(idx, v, "linux-amd64"); !ok {
 			t.Fatalf("rebuilt index missing %s", v)
 		}
+	}
+}
+
+func TestReindexKeepsOrBackfillsCreated(t *testing.T) {
+	ctx := context.Background()
+	st := useBucket(ctx, t)
+	start := time.Now().Add(-time.Second)
+	file := writeFile(t, t.TempDir(), "demo.tar.gz", []byte("reindex-created"))
+	for _, v := range []string{"1.0.0", "1.5.0"} {
+		if err := runPublish(ctx, publishFlags{tool: "demo", version: v, os: "linux", arch: "amd64", file: file}); err != nil {
+			t.Fatalf("publish %s: %v", v, err)
+		}
+	}
+
+	// 1.0.0 carries a known publish time; 1.5.0 looks like an index written
+	// before Created existed.
+	kept := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	idx, etag, err := st.GetIndex(ctx, "demo")
+	if err != nil {
+		t.Fatalf("get index: %v", err)
+	}
+	idx.SetCreated("1.0.0", kept)
+	idx.SetCreated("1.5.0", time.Time{})
+	if err := st.PutIndex(ctx, "demo", idx, etag); err != nil {
+		t.Fatalf("put index: %v", err)
+	}
+
+	if err := runReindex(ctx, "demo"); err != nil {
+		t.Fatalf("reindex: %v", err)
+	}
+	idx, _, err = st.GetIndex(ctx, "demo")
+	if err != nil {
+		t.Fatalf("get rebuilt index: %v", err)
+	}
+	got := map[string]time.Time{}
+	for _, r := range idx.Releases() {
+		got[r.Version] = r.Created
+	}
+	if !got["1.0.0"].Equal(kept) {
+		t.Fatalf("1.0.0 created = %v, want kept %v", got["1.0.0"], kept)
+	}
+	if c := got["1.5.0"]; c.Before(start) || c.After(time.Now().Add(time.Second)) {
+		t.Fatalf("1.5.0 created = %v, want object LastModified near now", c)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -35,23 +36,49 @@ func runReindex(ctx context.Context, tool string) error {
 		return err
 	}
 
-	keys, err := st.ListKeys(ctx, tool+"/")
+	objs, err := st.ListObjects(ctx, tool+"/")
 	if err != nil {
 		return err
 	}
 
+	// A version keeps the publish time already in the index. Without one, the
+	// earliest LastModified of its artifacts stands in for it.
+	created := map[string]time.Time{}
+	current, _, err := st.GetIndex(ctx, tool)
+	if err != nil && !errors.Is(err, store.ErrNotFound) {
+		return err
+	}
+	if current != nil {
+		for _, r := range current.Releases() {
+			if !r.Created.IsZero() {
+				created[r.Version] = r.Created
+			}
+		}
+	}
+	earliest := map[string]time.Time{}
+
 	rebuilt := index.New(tool)
-	for _, key := range keys {
-		version, osArch, ok := parseArtifactKey(tool, key)
+	for _, obj := range objs {
+		version, osArch, ok := parseArtifactKey(tool, obj.Key)
 		if !ok {
 			continue
 		}
-		sum, size, err := hashObject(ctx, st, key)
+		sum, size, err := hashObject(ctx, st, obj.Key)
 		if err != nil {
 			return err
 		}
-		rebuilt.Upsert(version, osArch, index.Artifact{Key: key, SHA256: sum, Size: size})
-		fmt.Printf("indexed %s\n", key)
+		rebuilt.Upsert(version, osArch, index.Artifact{Key: obj.Key, SHA256: sum, Size: size})
+		if e, ok := earliest[version]; !obj.LastModified.IsZero() && (!ok || obj.LastModified.Before(e)) {
+			earliest[version] = obj.LastModified
+		}
+		fmt.Printf("indexed %s\n", obj.Key)
+	}
+	for _, r := range rebuilt.Releases() {
+		t, ok := created[r.Version]
+		if !ok {
+			t = earliest[r.Version]
+		}
+		rebuilt.SetCreated(r.Version, t)
 	}
 	rebuilt.SortVersions()
 

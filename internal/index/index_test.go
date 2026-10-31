@@ -2,7 +2,9 @@ package index
 
 import (
 	"reflect"
+	"strings"
 	"testing"
+	"time"
 )
 
 func art(key string) Artifact {
@@ -154,5 +156,75 @@ func TestLoadEmptyVersions(t *testing.T) {
 	}
 	if idx.Versions == nil {
 		t.Fatal("expected non-nil versions slice")
+	}
+}
+
+func TestUpsertStampsCreatedOnce(t *testing.T) {
+	idx := New("mytool")
+	before := time.Now().UTC()
+	idx.Upsert("1.0.0", "linux-amd64", art("a"))
+	n := idx.findVersion("1.0.0")
+	first := idx.Versions[n].Created
+	if first.Before(before) {
+		t.Fatalf("created = %v, want at or after %v", first, before)
+	}
+
+	// Adding an os-arch to an existing version is not a new release.
+	idx.SetCreated("1.0.0", first.Add(-time.Hour))
+	idx.Upsert("1.0.0", "darwin-arm64", art("b"))
+	n = idx.findVersion("1.0.0")
+	if got := idx.Versions[n].Created; !got.Equal(first.Add(-time.Hour)) {
+		t.Fatalf("created moved to %v on second upsert", got)
+	}
+}
+
+func TestSortVersionsKeepsEarliestCreated(t *testing.T) {
+	early := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	late := early.Add(24 * time.Hour)
+	idx := &Index{
+		Name: "mytool",
+		Versions: []Version{
+			{Version: "1.0.0", Artifacts: map[string]Artifact{"linux-amd64": art("a")}},
+			{Version: "1.0.0", Created: late, Artifacts: map[string]Artifact{"darwin-arm64": art("b")}},
+			{Version: "1.0.0", Created: early, Artifacts: map[string]Artifact{"windows-amd64": art("c")}},
+		},
+	}
+	idx.SortVersions()
+	if got := idx.Releases(); len(got) != 1 || !got[0].Created.Equal(early) {
+		t.Fatalf("releases = %+v, want one with created %v", got, early)
+	}
+}
+
+func TestCreatedJSON(t *testing.T) {
+	created := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	idx := New("mytool")
+	idx.Upsert("1.0.0", "linux-amd64", art("a"))
+	idx.SetCreated("1.0.0", created)
+	data, err := idx.Marshal()
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	loaded, err := Load(data)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if got := loaded.Releases()[0].Created; !got.Equal(created) {
+		t.Fatalf("created after round trip = %v, want %v", got, created)
+	}
+
+	// An index written before Created existed loads as undated and stays so.
+	old, err := Load([]byte(`{"name":"x","updated":"2026-08-27T00:00:00Z","versions":[{"version":"1.0.0","artifacts":{}}]}`))
+	if err != nil {
+		t.Fatalf("load old: %v", err)
+	}
+	if !old.Releases()[0].Created.IsZero() {
+		t.Fatal("expected zero created for an old index")
+	}
+	out, err := old.Marshal()
+	if err != nil {
+		t.Fatalf("marshal old: %v", err)
+	}
+	if strings.Contains(string(out), `"created"`) {
+		t.Fatalf("zero created should be omitted: %s", out)
 	}
 }

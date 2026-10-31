@@ -93,6 +93,35 @@ func TestListTools(t *testing.T) {
 	}
 }
 
+func TestListVersionsReleases(t *testing.T) {
+	created := time.Date(2026, 10, 1, 12, 0, 0, 0, time.UTC)
+	idx := sampleIndex()
+	idx.SetCreated("1.0.0", created)
+	idx.SetCreated("1.2.9", time.Time{})
+	s := newTestServer(&fakeStore{idx: idx}, "")
+
+	rec := do(s, http.MethodGet, "/tools/mytool/versions", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("code=%d body=%s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Versions []string         `json:"versions"`
+		Releases []map[string]any `json:"releases"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(body.Versions) != 2 || len(body.Releases) != 2 {
+		t.Fatalf("body=%s", rec.Body.String())
+	}
+	if body.Releases[0]["version"] != "1.0.0" || body.Releases[0]["created_at"] != "2026-10-01T12:00:00Z" {
+		t.Fatalf("releases[0]=%v", body.Releases[0])
+	}
+	if _, ok := body.Releases[1]["created_at"]; ok {
+		t.Fatalf("undated version should have no created_at: %v", body.Releases[1])
+	}
+}
+
 func TestResolveAndArtifact(t *testing.T) {
 	s := newTestServer(&fakeStore{idx: sampleIndex()}, "")
 
