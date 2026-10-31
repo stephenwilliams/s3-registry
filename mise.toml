@@ -1,12 +1,13 @@
 [tools]
 go = "1.27"
 golangci-lint = "latest"
-hk = "latest"
+hk = "2.10"
 pkl = "latest"
+shellcheck = "latest"
 actionlint = "latest"
 
 [env]
-HK_MISE = 1
+HK_MISE = "1"
 
 [hooks]
 postinstall = "hk install --mise"
